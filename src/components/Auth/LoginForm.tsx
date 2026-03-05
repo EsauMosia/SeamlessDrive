@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Mail, Lock } from 'lucide-react';
 
 type LoginFormProps = {
   onToggleForm: () => void;
@@ -28,72 +28,57 @@ export function LoginForm({ onToggleForm }: LoginFormProps) {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
-          <p className="text-gray-600">Sign in to continue your safe driving journey</p>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-200">{error}</p>
         </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="Enter your password"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Signing In...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-gray-600">
-            Don't have an account?{' '}
-            <button
-              onClick={onToggleForm}
-              className="text-blue-600 hover:text-blue-700 font-semibold transition-colors"
-            >
-              Sign Up
-            </button>
-          </p>
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2.5">
+          Email
+        </label>
+        <div className="relative">
+          <Mail className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 text-white rounded-lg focus:bg-white/10 focus:border-blue-400 focus:outline-none transition-all placeholder-gray-500"
+            placeholder="you@example.com"
+          />
         </div>
       </div>
-    </div>
+
+      <div>
+        <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2.5">
+          Password
+        </label>
+        <div className="relative">
+          <Lock className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 text-white rounded-lg focus:bg-white/10 focus:border-blue-400 focus:outline-none transition-all placeholder-gray-500"
+            placeholder="Enter your password"
+          />
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/50 hover:shadow-blue-600/70"
+      >
+        {loading ? 'Signing In...' : 'Sign In'}
+      </button>
+    </form>
   );
 }

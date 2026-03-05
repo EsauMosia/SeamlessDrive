@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { X, MapPin, Clock, TrendingUp, Square, AlertTriangle, Zap } from 'lucide-react';
+import { X, MapPin, Clock, TrendingUp, Square, AlertTriangle, Zap, Award } from 'lucide-react';
 
 type TripTrackerProps = {
   onClose: () => void;
@@ -127,108 +127,97 @@ export function TripTracker({ onClose }: TripTrackerProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-2xl">
+    <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/10">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-600/20 to-blue-700/20 border-b border-white/10 text-white p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold">Trip in Progress</h2>
-              <p className="text-blue-100 mt-1">Drive safely and stay alert</p>
+              <h2 className="text-2xl font-light text-white">Trip in Progress</h2>
+              <p className="text-gray-400 text-sm mt-1">Drive safely and stay alert</p>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
             >
-              <X className="w-6 h-6" />
+              <X className="w-6 h-6 text-gray-400" />
             </button>
           </div>
         </div>
 
         <div className="p-6 space-y-6">
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <MapPin className="w-6 h-6 text-blue-600" />
+          <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border border-blue-500/30 rounded-2xl p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <MapPin className="w-5 h-5 text-blue-400" />
               <div>
-                <p className="text-sm text-gray-600">Current Location</p>
-                <p className="font-bold text-gray-900">{location}</p>
+                <p className="text-xs text-gray-400 uppercase tracking-wide">Current Location</p>
+                <p className="font-light text-white mt-1">{location}</p>
               </div>
             </div>
             <div className="text-center">
-              <p className="text-6xl font-bold text-blue-600">{currentSpeed}</p>
-              <p className="text-gray-600 font-medium mt-1">km/h</p>
+              <p className="text-7xl font-light text-blue-300">{currentSpeed}</p>
+              <p className="text-gray-400 font-light mt-2">km/h</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-gray-100 p-3 rounded-lg">
-                  <Clock className="w-5 h-5 text-gray-600" />
-                </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-sm text-gray-600">Duration</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatDuration(duration)}</p>
+                  <p className="text-xs text-gray-500">Duration</p>
+                  <p className="text-xl font-light text-white mt-1">{formatDuration(duration)}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-gray-100 p-3 rounded-lg">
-                  <TrendingUp className="w-5 h-5 text-gray-600" />
-                </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-sm text-gray-600">Distance</p>
-                  <p className="text-2xl font-bold text-gray-900">{distance.toFixed(1)} km</p>
+                  <p className="text-xs text-gray-500">Distance</p>
+                  <p className="text-xl font-light text-white mt-1">{distance.toFixed(1)} km</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-gray-100 p-3 rounded-lg">
-                  <TrendingUp className="w-5 h-5 text-gray-600" />
-                </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-sm text-gray-600">Avg Speed</p>
-                  <p className="text-2xl font-bold text-gray-900">{avgSpeed} km/h</p>
+                  <p className="text-xs text-gray-500">Avg Speed</p>
+                  <p className="text-xl font-light text-white mt-1">{avgSpeed} km/h</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-green-100 p-3 rounded-lg">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
-                </div>
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-emerald-400" />
                 <div>
-                  <p className="text-sm text-gray-600">Safety Score</p>
-                  <p className="text-2xl font-bold text-gray-900">{calculateSafetyScore()}</p>
+                  <p className="text-xs text-emerald-300">Safety Score</p>
+                  <p className="text-xl font-light text-emerald-300 mt-1">{calculateSafetyScore()}</p>
                 </div>
               </div>
             </div>
           </div>
 
           {(harshBraking > 0 || rapidAccel > 0) && (
-            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4">
-              <h3 className="font-bold text-gray-900 mb-3">Driving Events</h3>
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+              <h3 className="font-light text-white mb-3 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                Driving Events
+              </h3>
               <div className="space-y-2">
                 {harshBraking > 0 && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                      <span className="text-sm text-gray-700">Harsh Braking</span>
-                    </div>
-                    <span className="font-bold text-gray-900">{harshBraking}</span>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-300">Harsh Braking</span>
+                    <span className="font-light text-amber-300">{harshBraking}</span>
                   </div>
                 )}
                 {rapidAccel > 0 && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-yellow-600" />
-                      <span className="text-sm text-gray-700">Rapid Acceleration</span>
-                    </div>
-                    <span className="font-bold text-gray-900">{rapidAccel}</span>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-300">Rapid Acceleration</span>
+                    <span className="font-light text-amber-300">{rapidAccel}</span>
                   </div>
                 )}
               </div>
@@ -238,7 +227,7 @@ export function TripTracker({ onClose }: TripTrackerProps) {
           <button
             onClick={endTrip}
             disabled={ending}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+            className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 disabled:from-gray-700 disabled:to-gray-600 text-white font-light py-4 px-6 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
             <Square className="w-5 h-5" />
             {ending ? 'Ending Trip...' : 'End Trip'}
