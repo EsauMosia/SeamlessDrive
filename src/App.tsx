@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthPage } from './components/Auth/AuthPage';
 import { Dashboard } from './components/Dashboard/Dashboard';
-import { TripTracker } from './components/Trip/TripTracker';
+import { DrivingMode } from './components/Driving/DrivingMode';
 
 function App() {
   const { user, loading } = useAuth();
-  const [isTripActive, setIsTripActive] = useState(false);
+  const [isDrivingMode, setIsDrivingMode] = useState(false);
 
   if (loading) {
     return (
@@ -20,12 +20,11 @@ function App() {
     return <AuthPage />;
   }
 
-  return (
-    <>
-      <Dashboard onStartTrip={() => setIsTripActive(true)} />
-      {isTripActive && <TripTracker onClose={() => setIsTripActive(false)} />}
-    </>
-  );
+  if (isDrivingMode) {
+    return <DrivingMode onExit={() => setIsDrivingMode(false)} />;
+  }
+
+  return <Dashboard onStartDriving={() => setIsDrivingMode(true)} />;
 }
 
 export default App;
