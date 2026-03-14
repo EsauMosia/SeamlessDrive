@@ -15,6 +15,7 @@ type DrivingModeProps = {
 export function DrivingMode({ onExit }: DrivingModeProps) {
   const { user, refreshProfile } = useAuth();
   const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [sensorInterrupted, setSensorInterrupted] = useState(false);
   const [safetyStatus, setSafetyStatus] = useState<'safe' | 'warning' | 'critical'>('safe');
   const [lastAlert, setLastAlert] = useState<DrivingEvent | null>(null);
   const [crashAlert, setCrashAlert] = useState(false);
@@ -33,6 +34,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     initializeTrip();
     startSensors();
     startMonitoring();
+    startSensorWatchdog();
 
     return () => {
       sensorService.destroy();
@@ -61,6 +63,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     const hasPermission = await sensorService.getPermissions();
     if (!hasPermission) {
       console.error('Sensor permissions denied');
+      setSensorInterrupted(true);
       return;
     }
 
@@ -76,6 +79,10 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
       const gps = sensorService.getCurrentGPS();
       const motion = sensorService.getCurrentMotion();
       const now = Date.now();
+
+      if (!gps && !motion) {
+        setSensorInterrupted(true);
+      }
 
       if (gps) {
         setDrivingTime((prev) => prev + 1);
@@ -117,12 +124,23 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
           });
         } catch (err) {
           // Optionally add retry logic or error reporting
-          // console.error('Failed to persist driving metric:', err);
         }
       }
     }, 1000);
 
     return () => clearInterval(interval);
+  };
+
+  // Watchdog for sensor interruption
+  const startSensorWatchdog = () => {
+    const watchdog = setInterval(() => {
+      const gps = sensorService.getCurrentGPS();
+      const motion = sensorService.getCurrentMotion();
+      if (!gps && !motion) {
+        setSensorInterrupted(true);
+      }
+    }, 3000);
+    return () => clearInterval(watchdog);
   };
 
   const handleEndTrip = async () => {
@@ -231,6 +249,31 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         </div>
       </div>
     );
+  }
+
+  if (sensorInterrupted) {
+    return (
+      <div className="fixed inset-0 bg-yellow-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div className="bg-yellow-900/50 border-2 border-yellow-500 rounded-3xl p-8 max-w-md w-full text-center space-y-6">
+          <div className="w-20 h-20 bg-yellow-500 rounded-full mx-auto flex items-center justify-center animate-pulse">
+            <AlertTriangle className="w-10 h-10 text-white" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold text-white mb-2">Sensor Tracking Interrupted</h2>
+            <p className="text-yellow-100">Driving sensors have stopped. Please check permissions or restart Driving Mode.</p>
+          </div>
+          <div className="space-y-3">
+            <button
+              onClick={() => { setSensorInterrupted(false); onExit(); }}
+              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+            >
+              Exit Driving Mode
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   }
 
   return (
