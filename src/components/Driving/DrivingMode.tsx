@@ -26,6 +26,8 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const detectionEngine = useState(new DrivingDetectionEngine())[0];
   const behaviorEngine = useState(new BehaviorAnalysisEngine())[0];
   const crashEngine = useState(new CrashDetectionEngine())[0];
+  // Track last persisted metric timestamp
+  const [lastPersisted, setLastPersisted] = useState<number>(0);
 
   useEffect(() => {
     initializeTrip();
@@ -73,6 +75,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     const interval = setInterval(async () => {
       const gps = sensorService.getCurrentGPS();
       const motion = sensorService.getCurrentMotion();
+      const now = Date.now();
 
       if (gps) {
         setDrivingTime((prev) => prev + 1);
@@ -95,6 +98,28 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
           setCrashAlert(true);
         }
       }
+
+      // Persist driving metrics every second
+      if (tripId && gps && (now - lastPersisted > 900)) {
+        setLastPersisted(now);
+        try {
+          await supabase.from('driving_metrics').insert({
+            trip_id: tripId,
+            timestamp: new Date().toISOString(),
+            speed: gps.speed,
+            latitude: gps.latitude,
+            longitude: gps.longitude,
+            acceleration: motion ? Math.sqrt(
+              motion.acceleration.x ** 2 +
+              motion.acceleration.y ** 2 +
+              motion.acceleration.z ** 2
+            ) : null,
+          });
+        } catch (err) {
+          // Optionally add retry logic or error reporting
+          // console.error('Failed to persist driving metric:', err);
+        }
+      }
     }, 1000);
 
     return () => clearInterval(interval);
@@ -103,16 +128,52 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const handleEndTrip = async () => {
     if (!tripId || !user) return;
 
+    // Fetch all driving metrics for this trip
+    const { data: metricsData, error: metricsError } = await supabase
+      .from('driving_metrics')
+      .select('*')
+      .eq('trip_id', tripId);
+
+    let totalDistance = 0;
+    let maxSpeed = 0;
+    let avgSpeed = 0;
+    let duration = drivingTime;
+    if (!metricsError && metricsData && metricsData.length > 0) {
+      // Calculate total distance, max speed, avg speed
+      let prev = null;
+      let speedSum = 0;
+      metricsData.forEach((m, idx) => {
+        speedSum += m.speed;
+        if (m.speed > maxSpeed) maxSpeed = m.speed;
+        if (prev) {
+          // Estimate distance using haversine formula or simple approximation
+          const dx = m.latitude - prev.latitude;
+          const dy = m.longitude - prev.longitude;
+          const dist = Math.sqrt(dx * dx + dy * dy) * 111; // rough km conversion
+          totalDistance += dist;
+        }
+        prev = m;
+      });
+      avgSpeed = Math.round(speedSum / metricsData.length);
+      totalDistance = Math.round(totalDistance * 100) / 100;
+      duration = metricsData.length;
+    } else {
+      // fallback to previous calculation
+      totalDistance = currentSpeed * (drivingTime / 3600);
+      avgSpeed = currentSpeed;
+      maxSpeed = currentSpeed;
+    }
+
     const metrics = behaviorEngine.getMetrics();
     await supabase
       .from('trips')
       .update({
         end_time: new Date().toISOString(),
         end_location: 'Trip Ended',
-        distance: currentSpeed * (drivingTime / 3600),
-        duration: drivingTime,
-        average_speed: metrics.averageSpeed,
-        max_speed: metrics.maxSpeed,
+        distance: totalDistance,
+        duration: duration,
+        average_speed: avgSpeed,
+        max_speed: maxSpeed,
         harsh_braking_count: metrics.harshBrakingCount,
         rapid_acceleration_count: metrics.rapidAccelerationCount,
         safety_score: metrics.overallSafetyScore,
