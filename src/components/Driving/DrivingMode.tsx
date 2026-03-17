@@ -7,6 +7,7 @@ import { BehaviorAnalysisEngine, DrivingEvent } from '../../lib/behaviorAnalysis
 import { CrashDetectionEngine } from '../../lib/crashDetection';
 import { AlertTriangle, Shield, Zap, MapPin, X } from 'lucide-react';
 import { VoiceFeedbackRecorder } from './VoiceFeedbackRecorder';
+import { EmergencyContactSystem } from './EmergencyContactSystem';
 
 type DrivingModeProps = {
   onExit: () => void;
@@ -239,12 +240,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
             >
               I'm Safe
             </button>
-            <button
-              onClick={() => (window.location.href = 'tel:911')}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-            >
-              Call Emergency (911)
-            </button>
+            <EmergencyContactSystem userId={user?.id || ''} />
           </div>
         </div>
       </div>
@@ -274,8 +270,6 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
       </div>
     );
   }
-  }
-
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 z-50 flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-6 space-y-12">
