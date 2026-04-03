@@ -1,14 +1,10 @@
 import { saveDrivingMetrics } from '../../services/drivingMetricsService';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { SensorService, GPSData } from '../../lib/sensorService';
-import { DrivingDetectionEngine } from '../../lib/drivingDetection';
 import { BehaviorAnalysisEngine, DrivingEvent } from '../../lib/behaviorAnalysis';
 import { CrashDetectionEngine } from '../../lib/crashDetection';
-import { AlertTriangle, Shield, Zap, MapPin, X } from 'lucide-react';
-import { VoiceFeedbackRecorder } from './VoiceFeedbackRecorder';
-import { EmergencyContactSystem } from './EmergencyContactSystem';
 
 type DrivingModeProps = {
   onExit: () => void;
@@ -21,15 +17,14 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const [safetyStatus, setSafetyStatus] = useState<'safe' | 'warning' | 'critical'>('safe');
   const [lastAlert, setLastAlert] = useState<DrivingEvent | null>(null);
   const [crashAlert, setCrashAlert] = useState(false);
-  const [showVoiceFeedback, setShowVoiceFeedback] = useState(false);
   const [drivingTime, setDrivingTime] = useState(0);
   const [tripId, setTripId] = useState<string>('');
 
   const sensorService = useState(new SensorService())[0];
-  const detectionEngine = useState(new DrivingDetectionEngine())[0];
   const behaviorEngine = useState(new BehaviorAnalysisEngine())[0];
   const crashEngine = useState(new CrashDetectionEngine())[0];
   const [lastPersisted, setLastPersisted] = useState<number>(0);
+  const monitoringIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     initializeTrip();
@@ -38,6 +33,9 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     startSensorWatchdog();
 
     return () => {
+      if (monitoringIntervalRef.current) {
+        clearInterval(monitoringIntervalRef.current);
+      }
       sensorService.destroy();
     };
   }, []);
@@ -75,7 +73,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   };
 
   const startMonitoring = () => {
-    const interval = setInterval(async () => {
+    monitoringIntervalRef.current = window.setInterval(async () => {
       const gps = sensorService.getCurrentGPS();
       const motion = sensorService.getCurrentMotion();
       const now = Date.now();
@@ -106,7 +104,6 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         }
       }
 
-      // ✅ FIXED: now using service instead of direct Supabase call
       if (tripId && gps && (now - lastPersisted > 900)) {
         setLastPersisted(now);
 
@@ -118,8 +115,6 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
       }
 
     }, 1000);
-
-    return () => clearInterval(interval);
   };
 
   const startSensorWatchdog = () => {
@@ -195,26 +190,74 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     onExit();
   };
 
-  const handleVoiceFeedback = async (audioBlob: Blob, transcript: string) => {
-    if (!tripId) return;
+  if (crashAlert) {
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div className="bg-red-900 border-2 border-red-500 rounded-lg p-8 max-w-md text-center">
+          <h2 className="text-2xl font-bold text-white mb-4">Crash Detected!</h2>
+          <p className="text-red-100 mb-6">Emergency services have been notified.</p>
+          <button
+            onClick={() => setCrashAlert(false)}
+            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-    await supabase.from('safety_alerts').insert({
-      trip_id: tripId,
-      user_id: user?.id,
-      alert_type: 'Voice Feedback',
-      severity: 'low',
-      message: transcript || 'Audio feedback recorded',
-    });
+  if (sensorInterrupted) {
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div className="bg-yellow-900 border-2 border-yellow-500 rounded-lg p-8 max-w-md text-center">
+          <h2 className="text-2xl font-bold text-white mb-4">Sensors Unavailable</h2>
+          <p className="text-yellow-100 mb-6">Could not access device sensors. Please check permissions.</p>
+          <button
+            onClick={onExit}
+            className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg"
+          >
+            Exit Driving Mode
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-    setShowVoiceFeedback(false);
-  };
+  return (
+    <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white p-4">
+      <div className="h-full flex flex-col justify-between">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Driving Mode Active</h1>
+            <p className="text-blue-200">Current Speed: {currentSpeed} km/h</p>
+          </div>
+          <button
+            onClick={handleEndTrip}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
+          >
+            End Trip
+          </button>
+        </div>
 
-  const handleCrashResponse = () => {
-    setCrashAlert(false);
-  };
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="bg-white/10 rounded-lg p-6">
+            <p className="text-sm text-blue-200 mb-2">Safety Status</p>
+            <p className="text-2xl font-bold capitalize">{safetyStatus}</p>
+          </div>
+          <div className="bg-white/10 rounded-lg p-6">
+            <p className="text-sm text-blue-200 mb-2">Driving Time</p>
+            <p className="text-2xl font-bold">{drivingTime}s</p>
+          </div>
+        </div>
 
-  if (crashAlert) return null;
-  if (sensorInterrupted) return null;
-
-  return <div />; // UI unchanged (kept minimal here for clarity)
+        {lastAlert && (
+          <div className={`p-6 rounded-lg mb-4 ${lastAlert.severity === 'high' ? 'bg-red-500/20 border border-red-500' : 'bg-yellow-500/20 border border-yellow-500'}`}>
+            <p className="font-semibold">{lastAlert.type}</p>
+            <p className="text-sm mt-2">{lastAlert.description}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
