@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { getSuggestedLocations } from '../../services/locationService';
 import { X, MapPin, Clock, TrendingUp, Square, AlertTriangle, Zap, Award } from 'lucide-react';
 
 type TripTrackerProps = {
@@ -19,6 +20,8 @@ export function TripTracker({ onClose }: TripTrackerProps) {
   const [rapidAccel, setRapidAccel] = useState(0);
   const [location, setLocation] = useState('Current Location');
   const [ending, setEnding] = useState(false);
+  const [destination, setDestination] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     startTrip();
@@ -126,6 +129,20 @@ export function TripTracker({ onClose }: TripTrackerProps) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleDestinationChange = (value: string) => {
+    setDestination(value);
+    if (value.length > 0) {
+      setSuggestions(getSuggestedLocations(value));
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const selectSuggestion = (suggestion: string) => {
+    setDestination(suggestion);
+    setSuggestions([]);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/10">
@@ -157,6 +174,38 @@ export function TripTracker({ onClose }: TripTrackerProps) {
               <p className="text-7xl font-light text-blue-300">{currentSpeed}</p>
               <p className="text-gray-400 font-light mt-2">km/h</p>
             </div>
+          </div>
+
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Destination
+            </label>
+            <div className="relative">
+              <MapPin className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" />
+              <input
+                type="text"
+                value={destination}
+                onChange={(e) => handleDestinationChange(e.target.value)}
+                placeholder="Where are you going?"
+                className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 text-white rounded-lg focus:bg-white/10 focus:border-blue-400 focus:outline-none transition-all placeholder-gray-500"
+              />
+            </div>
+            {suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-lg z-10">
+                {suggestions.map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => selectSuggestion(suggestion)}
+                    className="w-full text-left px-4 py-3 hover:bg-white/10 transition-colors text-white text-sm border-b border-white/5 last:border-b-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-gray-400" />
+                      {suggestion}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

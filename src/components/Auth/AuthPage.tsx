@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { LoginForm } from './LoginForm';
 import { RegisterForm } from './RegisterForm';
+import { ForgotPasswordForm } from './ForgotPasswordForm';
 import { Shield, ArrowRight } from 'lucide-react';
 
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 relative overflow-hidden flex items-center justify-center">
@@ -29,24 +31,28 @@ export function AuthPage() {
           </p>
         </div>
 
-        {isLogin ? (
-          <LoginForm onToggleForm={() => setIsLogin(false)} />
+        {isForgotPassword ? (
+          <ForgotPasswordForm onBack={() => setIsForgotPassword(false)} />
+        ) : isLogin ? (
+          <LoginForm onToggleForm={() => setIsLogin(false)} onForgotPassword={() => setIsForgotPassword(true)} />
         ) : (
           <RegisterForm onToggleForm={() => setIsLogin(true)} />
         )}
 
-        <div className="mt-8 text-center border-t border-white/10 pt-8">
-          <p className="text-gray-400 text-sm mb-4">
-            {isLogin ? "Don't have an account?" : 'Already signed up?'}
-          </p>
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-all border border-white/10 hover:border-white/20 group"
-          >
-            {isLogin ? 'Create Account' : 'Sign In'}
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
-        </div>
+        {!isForgotPassword && (
+          <div className="mt-8 text-center border-t border-white/10 pt-8">
+            <p className="text-gray-400 text-sm mb-4">
+              {isLogin ? "Don't have an account?" : 'Already signed up?'}
+            </p>
+            <button
+              onClick={() => setIsLogin(!isLogin)}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-all border border-white/10 hover:border-white/20 group"
+            >
+              {isLogin ? 'Create Account' : 'Sign In'}
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { SensorService, GPSData } from '../../lib/sensorService';
 import { BehaviorAnalysisEngine, DrivingEvent } from '../../lib/behaviorAnalysis';
 import { CrashDetectionEngine } from '../../lib/crashDetection';
+import { Gauge, AlertTriangle, X } from 'lucide-react';
 
 type DrivingModeProps = {
   onExit: () => void;
@@ -13,12 +14,16 @@ type DrivingModeProps = {
 export function DrivingMode({ onExit }: DrivingModeProps) {
   const { user, refreshProfile } = useAuth();
   const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [acceleration, setAcceleration] = useState(0);
+  const [prevSpeed, setPrevSpeed] = useState(0);
+  const [isStopped, setIsStopped] = useState(false);
   const [sensorInterrupted, setSensorInterrupted] = useState(false);
   const [safetyStatus, setSafetyStatus] = useState<'safe' | 'warning' | 'critical'>('safe');
   const [lastAlert, setLastAlert] = useState<DrivingEvent | null>(null);
   const [crashAlert, setCrashAlert] = useState(false);
   const [drivingTime, setDrivingTime] = useState(0);
   const [tripId, setTripId] = useState<string>('');
+  const [isEnding, setIsEnding] = useState(false);
 
   const sensorService = useState(new SensorService())[0];
   const behaviorEngine = useState(new BehaviorAnalysisEngine())[0];
@@ -85,6 +90,18 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
       if (gps) {
         setDrivingTime((prev) => prev + 1);
         behaviorEngine.analyzeSpeed(gps.speed);
+
+        setAcceleration((prev) => {
+          const accel = gps.speed - prevSpeed;
+          setPrevSpeed(gps.speed);
+          return accel;
+        });
+
+        if (gps.speed === 0 || gps.speed < 1) {
+          setIsStopped(true);
+        } else {
+          setIsStopped(false);
+        }
       }
 
       if (motion && gps) {
@@ -130,6 +147,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
 
   const handleEndTrip = async () => {
     if (!tripId || !user) return;
+    setIsEnding(true);
 
     const { data: metricsData, error: metricsError } = await supabase
       .from('driving_metrics')
@@ -224,40 +242,96 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     );
   }
 
+  const speedPercentage = Math.min((currentSpeed / 200) * 100, 100);
+
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white p-4">
-      <div className="h-full flex flex-col justify-between">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Driving Mode Active</h1>
-            <p className="text-blue-200">Current Speed: {currentSpeed} km/h</p>
+    <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white p-6 flex flex-col">
+      <div className="flex justify-between items-start mb-8">
+        <div>
+          <h1 className="text-3xl font-light mb-1">Driving Mode</h1>
+          <p className="text-gray-400 text-sm">Stay focused and safe</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-gray-400 text-xs">Safety</p>
+            <p className={`text-lg font-semibold capitalize ${
+              safetyStatus === 'safe' ? 'text-emerald-400' :
+              safetyStatus === 'warning' ? 'text-amber-400' : 'text-red-400'
+            }`}>
+              {safetyStatus}
+            </p>
           </div>
           <button
-            onClick={handleEndTrip}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
+            onClick={onExit}
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
           >
-            End Trip
+            <X className="w-6 h-6" />
           </button>
         </div>
+      </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <div className="bg-white/10 rounded-lg p-6">
-            <p className="text-sm text-blue-200 mb-2">Safety Status</p>
-            <p className="text-2xl font-bold capitalize">{safetyStatus}</p>
-          </div>
-          <div className="bg-white/10 rounded-lg p-6">
-            <p className="text-sm text-blue-200 mb-2">Driving Time</p>
-            <p className="text-2xl font-bold">{drivingTime}s</p>
+      <div className="flex-1 flex items-center justify-center mb-8">
+        <div className="relative w-80 h-80">
+          <svg className="w-full h-full" viewBox="0 0 300 300">
+            <circle cx="150" cy="150" r="140" fill="none" stroke="#1e293b" strokeWidth="2" />
+            <circle cx="150" cy="150" r="140" fill="none" stroke="#3b82f6" strokeWidth="8" strokeDasharray={`${(speedPercentage / 100) * 879} 879`} strokeLinecap="round" opacity="0.7" className="transition-all duration-500" />
+            <text x="150" y="150" fontSize="72" fontWeight="300" textAnchor="middle" dominantBaseline="middle" className="text-blue-300">
+              {currentSpeed}
+            </text>
+            <text x="150" y="190" fontSize="24" textAnchor="middle" className="text-gray-400">
+              km/h
+            </text>
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Gauge className="w-20 h-20 text-blue-500/30 absolute" />
           </div>
         </div>
-
-        {lastAlert && (
-          <div className={`p-6 rounded-lg mb-4 ${lastAlert.severity === 'high' ? 'bg-red-500/20 border border-red-500' : 'bg-yellow-500/20 border border-yellow-500'}`}>
-            <p className="font-semibold">{lastAlert.type}</p>
-            <p className="text-sm mt-2">{lastAlert.description}</p>
-          </div>
-        )}
       </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
+          <p className="text-xs text-gray-400 uppercase mb-3">Duration</p>
+          <p className="text-2xl font-light text-blue-300">{drivingTime}s</p>
+        </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
+          <p className="text-xs text-gray-400 uppercase mb-3">Acceleration</p>
+          <p className={`text-2xl font-light ${acceleration > 0 ? 'text-amber-400' : acceleration < 0 ? 'text-blue-400' : 'text-gray-300'}`}>
+            {acceleration.toFixed(1)}
+          </p>
+        </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
+          <p className="text-xs text-gray-400 uppercase mb-3">Status</p>
+          <p className={`text-2xl font-light ${isStopped ? 'text-emerald-400' : 'text-gray-300'}`}>
+            {isStopped ? 'Stopped' : 'Moving'}
+          </p>
+        </div>
+      </div>
+
+      {lastAlert && (
+        <div className={`mb-6 p-4 rounded-xl border flex items-start gap-3 ${
+          lastAlert.severity === 'high'
+            ? 'bg-red-500/10 border-red-500/30'
+            : 'bg-amber-500/10 border-amber-500/30'
+        }`}>
+          <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+            lastAlert.severity === 'high' ? 'text-red-400' : 'text-amber-400'
+          }`} />
+          <div>
+            <p className="font-medium text-sm">{lastAlert.type}</p>
+            <p className="text-xs text-gray-300 mt-1">{lastAlert.description}</p>
+          </div>
+        </div>
+      )}
+
+      {isStopped && (
+        <button
+          onClick={handleEndTrip}
+          disabled={isEnding}
+          className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 disabled:from-gray-700 disabled:to-gray-600 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isEnding ? 'Ending Trip...' : 'End Trip'}
+        </button>
+      )}
     </div>
   );
 }
