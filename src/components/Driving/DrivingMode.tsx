@@ -1,5 +1,5 @@
 import { saveDrivingMetrics } from '../../services/drivingMetricsService';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { SensorService, GPSData } from '../../lib/sensorService';
@@ -15,7 +15,6 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const { user, refreshProfile } = useAuth();
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [acceleration, setAcceleration] = useState(0);
-  const [prevSpeed, setPrevSpeed] = useState(0);
   const [isStopped, setIsStopped] = useState(false);
   const [sensorInterrupted, setSensorInterrupted] = useState(false);
   const [safetyStatus, setSafetyStatus] = useState<'safe' | 'warning' | 'critical'>('safe');
@@ -30,6 +29,18 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const crashEngine = useState(new CrashDetectionEngine())[0];
   const [lastPersisted, setLastPersisted] = useState<number>(0);
   const monitoringIntervalRef = useRef<number | null>(null);
+  const watchdogRef = useRef<number | null>(null);
+  const prevSpeedRef = useRef(0);
+  const tripIdRef = useRef('');
+  const lastPersistedRef = useRef(0);
+
+  useEffect(() => {
+    tripIdRef.current = tripId;
+  }, [tripId]);
+
+  useEffect(() => {
+    lastPersistedRef.current = lastPersisted;
+  }, [lastPersisted]);
 
   useEffect(() => {
     initializeTrip();
@@ -40,6 +51,9 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     return () => {
       if (monitoringIntervalRef.current) {
         clearInterval(monitoringIntervalRef.current);
+      }
+      if (watchdogRef.current) {
+        clearInterval(watchdogRef.current);
       }
       sensorService.destroy();
     };
@@ -91,17 +105,11 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         setDrivingTime((prev) => prev + 1);
         behaviorEngine.analyzeSpeed(gps.speed);
 
-        setAcceleration((prev) => {
-          const accel = gps.speed - prevSpeed;
-          setPrevSpeed(gps.speed);
-          return accel;
-        });
+        const newAccel = gps.speed - prevSpeedRef.current;
+        prevSpeedRef.current = gps.speed;
+        setAcceleration(newAccel);
 
-        if (gps.speed === 0 || gps.speed < 1) {
-          setIsStopped(true);
-        } else {
-          setIsStopped(false);
-        }
+        setIsStopped(gps.speed < 1);
       }
 
       if (motion && gps) {
@@ -121,11 +129,12 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         }
       }
 
-      if (tripId && gps && (now - lastPersisted > 900)) {
+      if (tripIdRef.current && gps && (now - lastPersistedRef.current > 900)) {
         setLastPersisted(now);
+        lastPersistedRef.current = now;
 
         await saveDrivingMetrics({
-          tripId,
+          tripId: tripIdRef.current,
           gps,
           motion,
         });
@@ -135,17 +144,16 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   };
 
   const startSensorWatchdog = () => {
-    const watchdog = setInterval(() => {
+    watchdogRef.current = window.setInterval(() => {
       const gps = sensorService.getCurrentGPS();
       const motion = sensorService.getCurrentMotion();
       if (!gps && !motion) {
         setSensorInterrupted(true);
       }
     }, 3000);
-    return () => clearInterval(watchdog);
   };
 
-  const handleEndTrip = async () => {
+  const handleEndTrip = useCallback(async () => {
     if (!tripId || !user) return;
     setIsEnding(true);
 
@@ -160,21 +168,21 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     let duration = drivingTime;
 
     if (!metricsError && metricsData && metricsData.length > 0) {
-      let prev = null;
+      let prevMetric: { latitude: number; longitude: number } | null = null;
       let speedSum = 0;
 
-      metricsData.forEach((m) => {
+      metricsData.forEach((m: { latitude: number; longitude: number; speed: number }) => {
         speedSum += m.speed;
         if (m.speed > maxSpeed) maxSpeed = m.speed;
 
-        if (prev) {
-          const dx = m.latitude - prev.latitude;
-          const dy = m.longitude - prev.longitude;
+        if (prevMetric) {
+          const dx = m.latitude - prevMetric.latitude;
+          const dy = m.longitude - prevMetric.longitude;
           const dist = Math.sqrt(dx * dx + dy * dy) * 111;
           totalDistance += dist;
         }
 
-        prev = m;
+        prevMetric = m;
       });
 
       avgSpeed = Math.round(speedSum / metricsData.length);
@@ -206,7 +214,12 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
 
     await refreshProfile();
     onExit();
-  };
+  }, [tripId, user, drivingTime, currentSpeed, behaviorEngine, refreshProfile, onExit]);
+
+  const speedPercentage = useMemo(
+    () => Math.min((currentSpeed / 200) * 100, 100),
+    [currentSpeed]
+  );
 
   if (crashAlert) {
     return (
@@ -241,8 +254,6 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
       </div>
     );
   }
-
-  const speedPercentage = Math.min((currentSpeed / 200) * 100, 100);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white p-6 flex flex-col">
@@ -318,7 +329,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
           }`} />
           <div>
             <p className="font-medium text-sm">{lastAlert.type}</p>
-            <p className="text-xs text-gray-300 mt-1">{lastAlert.description}</p>
+            <p className="text-xs text-gray-300 mt-1">{lastAlert.message}</p>
           </div>
         </div>
       )}

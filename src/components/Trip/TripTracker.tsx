@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { getSuggestedLocations } from '../../services/locationService';
-import { X, MapPin, Clock, TrendingUp, Square, AlertTriangle, Zap, Award } from 'lucide-react';
+import { X, MapPin, Clock, TrendingUp, Square, AlertTriangle, Award } from 'lucide-react';
 
 type TripTrackerProps = {
   onClose: () => void;
@@ -11,14 +11,12 @@ type TripTrackerProps = {
 export function TripTracker({ onClose }: TripTrackerProps) {
   const { user, refreshProfile } = useAuth();
   const [tripId, setTripId] = useState<string>('');
-  const [startTime, setStartTime] = useState<Date>(new Date());
   const [duration, setDuration] = useState(0);
   const [distance, setDistance] = useState(0);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [avgSpeed, setAvgSpeed] = useState(0);
   const [harshBraking, setHarshBraking] = useState(0);
   const [rapidAccel, setRapidAccel] = useState(0);
-  const [location, setLocation] = useState('Current Location');
   const [ending, setEnding] = useState(false);
   const [destination, setDestination] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -54,11 +52,12 @@ export function TripTracker({ onClose }: TripTrackerProps) {
   };
 
   const simulateDriving = () => {
+    const newSpeed = Math.floor(Math.random() * 40) + 40;
     setDistance((prev) => prev + (Math.random() * 0.02));
-    setCurrentSpeed(Math.floor(Math.random() * 40) + 40);
+    setCurrentSpeed(newSpeed);
     setAvgSpeed((prev) => {
-      if (prev === 0) return Math.floor(Math.random() * 40) + 40;
-      return Math.floor((prev * 0.9) + (currentSpeed * 0.1));
+      if (prev === 0) return newSpeed;
+      return Math.floor((prev * 0.9) + (newSpeed * 0.1));
     });
 
     if (Math.random() < 0.02) {
@@ -167,7 +166,7 @@ export function TripTracker({ onClose }: TripTrackerProps) {
               <MapPin className="w-5 h-5 text-blue-400" />
               <div>
                 <p className="text-xs text-gray-400 uppercase tracking-wide">Current Location</p>
-                <p className="font-light text-white mt-1">{location}</p>
+                <p className="font-light text-white mt-1">Current Location</p>
               </div>
             </div>
             <div className="text-center">

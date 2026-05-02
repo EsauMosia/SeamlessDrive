@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, SafetyAlert } from '../../lib/supabase';
 import { AlertTriangle, CheckCircle, MapPin, Clock } from 'lucide-react';
@@ -109,7 +109,7 @@ export function AlertsView() {
     }
   };
 
-  const unreadCount = alerts.filter(a => !a.is_read).length;
+  const unreadCount = useMemo(() => alerts.filter(a => !a.is_read).length, [alerts]);
 
   if (loading) {
     return (

@@ -4,9 +4,10 @@ import { AlertCircle, Mail, Lock } from 'lucide-react';
 
 type LoginFormProps = {
   onToggleForm: () => void;
+  onForgotPassword?: () => void;
 };
 
-export function LoginForm({ onToggleForm }: LoginFormProps) {
+export function LoginForm({ onForgotPassword }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

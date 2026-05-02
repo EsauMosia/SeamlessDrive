@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export type EmergencyContact = {
@@ -19,7 +19,6 @@ export function EmergencyContactSystem({ userId, onCall }: EmergencyContactSyste
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch contacts from Supabase
   const fetchContacts = async () => {
     setLoading(true);
     setError(null);
@@ -32,20 +31,6 @@ export function EmergencyContactSystem({ userId, onCall }: EmergencyContactSyste
     setLoading(false);
   };
 
-  // Add a new contact
-  const addContact = async (contact: EmergencyContact) => {
-    setLoading(true);
-    setError(null);
-    const { data, error } = await supabase
-      .from('emergency_contacts')
-      .insert([contact])
-      .select();
-    if (error) setError(error.message);
-    else setContacts([...contacts, ...(data || [])]);
-    setLoading(false);
-  };
-
-  // Remove a contact
   const removeContact = async (id: string) => {
     setLoading(true);
     setError(null);
@@ -58,16 +43,13 @@ export function EmergencyContactSystem({ userId, onCall }: EmergencyContactSyste
     setLoading(false);
   };
 
-  // Call a contact
   const callContact = (phone: string) => {
     if (onCall) onCall(phone);
     else window.location.href = `tel:${phone}`;
   };
 
-  // Initial fetch
-  React.useEffect(() => {
+  useEffect(() => {
     fetchContacts();
-    // eslint-disable-next-line
   }, []);
 
   return (
@@ -95,7 +77,6 @@ export function EmergencyContactSystem({ userId, onCall }: EmergencyContactSyste
           </li>
         ))}
       </ul>
-      {/* Add contact form can be implemented here */}
     </div>
   );
 }

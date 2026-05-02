@@ -24,7 +24,7 @@ export class BehaviorAnalysisEngine {
   private events: DrivingEvent[] = [];
   private maxHistorySize = 100;
 
-  analyzeMotion(motion: DeviceMotion, speed: number): DrivingEvent | null {
+  analyzeMotion(motion: DeviceMotion, _speed: number): DrivingEvent | null {
     const gForce = this.calculateGForce(motion);
     const rotationIntensity = this.calculateRotationIntensity(motion);
 

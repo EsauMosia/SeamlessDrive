@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, Trip } from '../../lib/supabase';
 import { TrendingUp, AlertTriangle, Zap, Clock, MapPin, BarChart3, ArrowLeft } from 'lucide-react';
@@ -31,14 +31,14 @@ export function InsightsScreen({ onBack }: InsightsScreenProps) {
     setLoading(false);
   };
 
-  const stats = {
+  const stats = useMemo(() => ({
     totalTrips: trips.length,
     totalDistance: trips.reduce((sum, t) => sum + t.distance, 0),
     avgSpeed: trips.length > 0 ? Math.round(trips.reduce((sum, t) => sum + t.average_speed, 0) / trips.length) : 0,
     avgSafetyScore: trips.length > 0 ? Math.round(trips.reduce((sum, t) => sum + t.safety_score, 0) / trips.length) : 100,
     totalHarshBraking: trips.reduce((sum, t) => sum + t.harsh_braking_count, 0),
     totalRapidAccel: trips.reduce((sum, t) => sum + t.rapid_acceleration_count, 0),
-  };
+  }), [trips]);
 
   if (loading) {
     return (
