@@ -3,6 +3,7 @@ import { useAuth } from './contexts/AuthContext';
 import { AuthPage } from './components/Auth/AuthPage';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import { DrivingMode } from './components/Driving/DrivingMode';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   const { user, loading } = useAuth();
@@ -17,14 +18,26 @@ function App() {
   }
 
   if (!user) {
-    return <AuthPage />;
+    return (
+      <ErrorBoundary>
+        <AuthPage />
+      </ErrorBoundary>
+    );
   }
 
   if (isDrivingMode) {
-    return <DrivingMode onExit={() => setIsDrivingMode(false)} />;
+    return (
+      <ErrorBoundary>
+        <DrivingMode onExit={() => setIsDrivingMode(false)} />
+      </ErrorBoundary>
+    );
   }
 
-  return <Dashboard onStartDriving={() => setIsDrivingMode(true)} />;
+  return (
+    <ErrorBoundary>
+      <Dashboard onStartDriving={() => setIsDrivingMode(true)} />
+    </ErrorBoundary>
+  );
 }
 
 export default App;

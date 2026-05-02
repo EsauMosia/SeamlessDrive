@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, Trip } from '../../lib/supabase';
-import { TrendingUp, AlertTriangle, Zap, Clock, MapPin, BarChart3, ArrowLeft } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Zap, Clock, MapPin, BarChart3, ArrowLeft, RefreshCw } from 'lucide-react';
 
 type InsightsScreenProps = {
   onBack: () => void;
@@ -11,6 +11,7 @@ export function InsightsScreen({ onBack }: InsightsScreenProps) {
   const { user } = useAuth();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -21,13 +22,18 @@ export function InsightsScreen({ onBack }: InsightsScreenProps) {
   const fetchTrips = async () => {
     if (!user) return;
 
-    const { data } = await supabase
+    setError(null);
+    const { data, error: fetchError } = await supabase
       .from('trips')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    setTrips(data || []);
+    if (fetchError) {
+      setError('Failed to load trips. Please try again.');
+    } else {
+      setTrips(data || []);
+    }
     setLoading(false);
   };
 
@@ -44,6 +50,27 @@ export function InsightsScreen({ onBack }: InsightsScreenProps) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 flex items-center justify-center p-6">
+        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 max-w-md w-full text-center">
+          <div className="bg-red-500/10 p-4 rounded-xl inline-block mb-6">
+            <AlertTriangle className="w-10 h-10 text-red-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-2">Failed to load data</h2>
+          <p className="text-gray-400 text-sm mb-6">{error}</p>
+          <button
+            onClick={fetchTrips}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

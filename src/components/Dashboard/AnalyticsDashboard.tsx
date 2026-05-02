@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { TrendingUp, AlertTriangle, Zap, Calendar, ArrowLeft } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Zap, Calendar, ArrowLeft, RefreshCw } from 'lucide-react';
 
 type AnalyticsDashboardProps = {
   onBack: () => void;
@@ -23,6 +23,7 @@ export function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) {
   const { user } = useAuth();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'all'>('month');
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) {
     if (!user) return;
 
     setLoading(true);
+    setError(null);
     let query = supabase
       .from('trips')
       .select('*')
@@ -49,10 +51,10 @@ export function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) {
       query = query.gte('start_time', cutoffDate.toISOString());
     }
 
-    const { data, error } = await query;
+    const { data, error: fetchError } = await query;
 
-    if (error) {
-      console.error('Error fetching trips:', error);
+    if (fetchError) {
+      setError('Failed to load analytics data. Please try again.');
     } else {
       setTrips(data || []);
     }
@@ -129,6 +131,27 @@ export function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 flex items-center justify-center p-6">
+        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 max-w-md w-full text-center">
+          <div className="bg-red-500/10 p-4 rounded-xl inline-block mb-6">
+            <AlertTriangle className="w-10 h-10 text-red-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-2">Failed to load analytics</h2>
+          <p className="text-gray-400 text-sm mb-6">{error}</p>
+          <button
+            onClick={fetchTrips}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

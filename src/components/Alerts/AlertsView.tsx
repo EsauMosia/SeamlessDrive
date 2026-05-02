@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, SafetyAlert } from '../../lib/supabase';
-import { AlertTriangle, CheckCircle, MapPin, Clock } from 'lucide-react';
+import { AlertTriangle, CheckCircle, MapPin, Clock, RefreshCw } from 'lucide-react';
 
 export function AlertsView() {
   const { user } = useAuth();
   const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
   useEffect(() => {
@@ -19,6 +20,7 @@ export function AlertsView() {
     if (!user) return;
 
     setLoading(true);
+    setError(null);
     let query = supabase
       .from('safety_alerts')
       .select('*')
@@ -29,10 +31,10 @@ export function AlertsView() {
       query = query.eq('is_read', false);
     }
 
-    const { data, error } = await query;
+    const { data, error: fetchError } = await query;
 
-    if (error) {
-      console.error('Error fetching alerts:', error);
+    if (fetchError) {
+      setError('Failed to load alerts. Please try again.');
     } else {
       setAlerts(data || []);
     }
@@ -115,6 +117,25 @@ export function AlertsView() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full text-center">
+          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Failed to load alerts</h3>
+          <p className="text-gray-600 text-sm mb-6">{error}</p>
+          <button
+            onClick={fetchAlerts}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

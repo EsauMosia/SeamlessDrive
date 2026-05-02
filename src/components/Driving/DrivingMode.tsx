@@ -1,11 +1,12 @@
-import { saveDrivingMetrics } from '../../services/drivingMetricsService';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { SensorService, GPSData } from '../../lib/sensorService';
 import { BehaviorAnalysisEngine, DrivingEvent } from '../../lib/behaviorAnalysis';
 import { CrashDetectionEngine } from '../../lib/crashDetection';
-import { Gauge, AlertTriangle, X } from 'lucide-react';
+import { saveDrivingMetrics, shutdownMetricsService } from '../../services/drivingMetricsService';
+import { offlineStorage } from '../../services/offlineStorage';
+import { Gauge, AlertTriangle, X, WifiOff } from 'lucide-react';
 
 type DrivingModeProps = {
   onExit: () => void;
@@ -23,30 +24,47 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const [drivingTime, setDrivingTime] = useState(0);
   const [tripId, setTripId] = useState<string>('');
   const [isEnding, setIsEnding] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [pendingSync, setPendingSync] = useState(0);
+  const [tripError, setTripError] = useState<string | null>(null);
 
   const sensorService = useState(new SensorService())[0];
   const behaviorEngine = useState(new BehaviorAnalysisEngine())[0];
   const crashEngine = useState(new CrashDetectionEngine())[0];
-  const [lastPersisted, setLastPersisted] = useState<number>(0);
   const monitoringIntervalRef = useRef<number | null>(null);
   const watchdogRef = useRef<number | null>(null);
   const prevSpeedRef = useRef(0);
   const tripIdRef = useRef('');
-  const lastPersistedRef = useRef(0);
+  const autoSyncCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     tripIdRef.current = tripId;
   }, [tripId]);
 
   useEffect(() => {
-    lastPersistedRef.current = lastPersisted;
-  }, [lastPersisted]);
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     initializeTrip();
     startSensors();
     startMonitoring();
     startSensorWatchdog();
+
+    autoSyncCleanupRef.current = offlineStorage.startAutoSync((result) => {
+      if (result.synced > 0) {
+        setPendingSync(offlineStorage.getPendingCount());
+      }
+    });
+
+    setPendingSync(offlineStorage.getPendingCount());
 
     return () => {
       if (monitoringIntervalRef.current) {
@@ -55,6 +73,10 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
       if (watchdogRef.current) {
         clearInterval(watchdogRef.current);
       }
+      if (autoSyncCleanupRef.current) {
+        autoSyncCleanupRef.current();
+      }
+      shutdownMetricsService();
       sensorService.destroy();
     };
   }, []);
@@ -62,18 +84,43 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const initializeTrip = async () => {
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('trips')
-      .insert({
-        user_id: user.id,
-        start_location: 'Driving Mode',
-        status: 'in_progress',
-      })
-      .select()
-      .single();
+    const tripIdLocal = crypto.randomUUID();
 
-    if (!error && data) {
-      setTripId(data.id);
+    if (offlineStorage.isOnline()) {
+      const { error } = await supabase
+        .from('trips')
+        .insert({
+          id: tripIdLocal,
+          user_id: user.id,
+          start_location: 'Driving Mode',
+          status: 'in_progress',
+        })
+        .select()
+        .single();
+
+      if (error) {
+        // Fallback to offline
+        offlineStorage.saveTrip({
+          id: tripIdLocal,
+          userId: user.id,
+          startLocation: 'Driving Mode',
+          startTime: new Date().toISOString(),
+          status: 'in_progress',
+        });
+        setIsOffline(true);
+      }
+
+      setTripId(tripIdLocal);
+    } else {
+      offlineStorage.saveTrip({
+        id: tripIdLocal,
+        userId: user.id,
+        startLocation: 'Driving Mode',
+        startTime: new Date().toISOString(),
+        status: 'in_progress',
+      });
+      setTripId(tripIdLocal);
+      setIsOffline(true);
     }
   };
 
@@ -92,10 +139,9 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   };
 
   const startMonitoring = () => {
-    monitoringIntervalRef.current = window.setInterval(async () => {
+    monitoringIntervalRef.current = window.setInterval(() => {
       const gps = sensorService.getCurrentGPS();
       const motion = sensorService.getCurrentMotion();
-      const now = Date.now();
 
       if (!gps && !motion) {
         setSensorInterrupted(true);
@@ -129,15 +175,14 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         }
       }
 
-      if (tripIdRef.current && gps && (now - lastPersistedRef.current > 900)) {
-        setLastPersisted(now);
-        lastPersistedRef.current = now;
-
-        await saveDrivingMetrics({
+      if (tripIdRef.current && gps) {
+        saveDrivingMetrics({
           tripId: tripIdRef.current,
           gps,
           motion,
         });
+
+        setPendingSync(offlineStorage.getPendingCount());
       }
 
     }, 1000);
@@ -156,64 +201,101 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const handleEndTrip = useCallback(async () => {
     if (!tripId || !user) return;
     setIsEnding(true);
+    setTripError(null);
 
-    const { data: metricsData, error: metricsError } = await supabase
-      .from('driving_metrics')
-      .select('*')
-      .eq('trip_id', tripId);
+    try {
+      // Flush any remaining queued metrics
+      shutdownMetricsService();
 
-    let totalDistance = 0;
-    let maxSpeed = 0;
-    let avgSpeed = 0;
-    let duration = drivingTime;
+      // Sync offline metrics first
+      if (!offlineStorage.isOnline()) {
+        // Save trip as completed offline
+        offlineStorage.saveTrip({
+          id: tripId,
+          userId: user.id,
+          startLocation: 'Driving Mode',
+          startTime: new Date().toISOString(),
+          status: 'completed',
+        });
 
-    if (!metricsError && metricsData && metricsData.length > 0) {
-      let prevMetric: { latitude: number; longitude: number } | null = null;
-      let speedSum = 0;
+        setTripError('Trip saved offline. Data will sync when you reconnect.');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await refreshProfile();
+        onExit();
+        return;
+      }
 
-      metricsData.forEach((m: { latitude: number; longitude: number; speed: number }) => {
-        speedSum += m.speed;
-        if (m.speed > maxSpeed) maxSpeed = m.speed;
+      // Sync any pending offline metrics
+      await offlineStorage.syncMetrics();
 
-        if (prevMetric) {
-          const dx = m.latitude - prevMetric.latitude;
-          const dy = m.longitude - prevMetric.longitude;
-          const dist = Math.sqrt(dx * dx + dy * dy) * 111;
-          totalDistance += dist;
-        }
+      const { data: metricsData, error: metricsError } = await supabase
+        .from('driving_metrics')
+        .select('*')
+        .eq('trip_id', tripId);
 
-        prevMetric = m;
-      });
+      let totalDistance = 0;
+      let maxSpeed = 0;
+      let avgSpeed = 0;
+      let duration = drivingTime;
 
-      avgSpeed = Math.round(speedSum / metricsData.length);
-      totalDistance = Math.round(totalDistance * 100) / 100;
-      duration = metricsData.length;
-    } else {
-      totalDistance = currentSpeed * (drivingTime / 3600);
-      avgSpeed = currentSpeed;
-      maxSpeed = currentSpeed;
+      if (!metricsError && metricsData && metricsData.length > 0) {
+        let prevMetric: { latitude: number; longitude: number } | null = null;
+        let speedSum = 0;
+
+        metricsData.forEach((m: { latitude: number; longitude: number; speed: number }) => {
+          speedSum += m.speed;
+          if (m.speed > maxSpeed) maxSpeed = m.speed;
+
+          if (prevMetric) {
+            const dx = m.latitude - prevMetric.latitude;
+            const dy = m.longitude - prevMetric.longitude;
+            const dist = Math.sqrt(dx * dx + dy * dy) * 111;
+            totalDistance += dist;
+          }
+
+          prevMetric = m;
+        });
+
+        avgSpeed = Math.round(speedSum / metricsData.length);
+        totalDistance = Math.round(totalDistance * 100) / 100;
+        duration = metricsData.length;
+      } else {
+        totalDistance = currentSpeed * (drivingTime / 3600);
+        avgSpeed = currentSpeed;
+        maxSpeed = currentSpeed;
+      }
+
+      const metrics = behaviorEngine.getMetrics();
+
+      const { error: updateError } = await supabase
+        .from('trips')
+        .update({
+          end_time: new Date().toISOString(),
+          end_location: 'Trip Ended',
+          distance: totalDistance,
+          duration,
+          average_speed: avgSpeed,
+          max_speed: maxSpeed,
+          harsh_braking_count: metrics.harshBrakingCount,
+          rapid_acceleration_count: metrics.rapidAccelerationCount,
+          safety_score: metrics.overallSafetyScore,
+          status: 'completed',
+        })
+        .eq('id', tripId);
+
+      if (updateError) {
+        setTripError('Failed to save trip. Data is preserved locally and will sync later.');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      await refreshProfile();
+      onExit();
+    } catch (err) {
+      console.error('Error ending trip:', err);
+      setTripError('An error occurred. Trip data is preserved locally.');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      onExit();
     }
-
-    const metrics = behaviorEngine.getMetrics();
-
-    await supabase
-      .from('trips')
-      .update({
-        end_time: new Date().toISOString(),
-        end_location: 'Trip Ended',
-        distance: totalDistance,
-        duration,
-        average_speed: avgSpeed,
-        max_speed: maxSpeed,
-        harsh_braking_count: metrics.harshBrakingCount,
-        rapid_acceleration_count: metrics.rapidAccelerationCount,
-        safety_score: metrics.overallSafetyScore,
-        status: 'completed',
-      })
-      .eq('id', tripId);
-
-    await refreshProfile();
-    onExit();
   }, [tripId, user, drivingTime, currentSpeed, behaviorEngine, refreshProfile, onExit]);
 
   const speedPercentage = useMemo(
@@ -263,6 +345,15 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
           <p className="text-gray-400 text-sm">Stay focused and safe</p>
         </div>
         <div className="flex items-center gap-4">
+          {isOffline && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              <WifiOff className="w-4 h-4 text-amber-400" />
+              <span className="text-xs text-amber-400">Offline</span>
+              {pendingSync > 0 && (
+                <span className="text-xs text-amber-300 ml-1">({pendingSync})</span>
+              )}
+            </div>
+          )}
           <div className="text-right">
             <p className="text-gray-400 text-xs">Safety</p>
             <p className={`text-lg font-semibold capitalize ${
@@ -317,6 +408,13 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
           </p>
         </div>
       </div>
+
+      {tripError && (
+        <div className="mb-4 p-4 rounded-xl border bg-amber-500/10 border-amber-500/30 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-200">{tripError}</p>
+        </div>
+      )}
 
       {lastAlert && (
         <div className={`mb-6 p-4 rounded-xl border flex items-start gap-3 ${
