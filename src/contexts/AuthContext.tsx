@@ -20,18 +20,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error fetching profile:', error);
-      return null;
-    }
-
+    const { data, error } = await supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle();
+    if (error) { console.error('Error fetching profile:', error); return null; }
     return data;
+  };
+
+  const cleanupOrphanedTrips = async (userId: string) => {
+    const cutoff = new Date(); cutoff.setHours(cutoff.getHours() - 2);
+    const { data: orphaned } = await supabase.from('trips').select('id').eq('user_id', userId).eq('status', 'in_progress').lt('created_at', cutoff.toISOString());
+    if (orphaned && orphaned.length > 0) {
+      await supabase.from('trips').update({ status: 'completed', end_time: new Date().toISOString(), end_location: 'Auto-completed (session ended)' }).in('id', orphaned.map(t => t.id));
+    }
   };
 
   const refreshProfile = async () => {
@@ -48,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           const profileData = await fetchProfile(session.user.id);
           setProfile(profileData);
+          cleanupOrphanedTrips(session.user.id);
         }
         setLoading(false);
       })();

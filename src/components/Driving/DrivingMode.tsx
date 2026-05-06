@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { SensorService, GPSData } from '../../lib/sensorService';
 import { BehaviorAnalysisEngine, DrivingEvent } from '../../lib/behaviorAnalysis';
 import { CrashDetectionEngine } from '../../lib/crashDetection';
+import { adaptiveLearning } from '../../lib/adaptiveLearning';
 import { saveDrivingMetrics, shutdownMetricsService } from '../../services/drivingMetricsService';
 import { offlineStorage } from '../../services/offlineStorage';
 import { Gauge, AlertTriangle, X, WifiOff } from 'lucide-react';
@@ -54,6 +55,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
 
   useEffect(() => {
     initializeTrip();
+    loadAdaptiveThresholds();
     startSensors();
     startMonitoring();
     startSensorWatchdog();
@@ -80,6 +82,12 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
       sensorService.destroy();
     };
   }, []);
+
+  const loadAdaptiveThresholds = async () => {
+    if (!user) return;
+    const profile = await adaptiveLearning.getOrCreateProfile(user.id);
+    if (profile) { behaviorEngine.setThresholds({ braking: profile.braking_threshold, acceleration: profile.acceleration_threshold, turn: profile.turn_threshold, speed: profile.speed_threshold }); }
+  };
 
   const initializeTrip = async () => {
     if (!user) return;
@@ -289,6 +297,20 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
       }
 
       await refreshProfile();
+
+      if (user) {
+        await adaptiveLearning.learnFromTrip({
+          harshBrakingCount: metrics.harshBrakingCount,
+          rapidAccelerationCount: metrics.rapidAccelerationCount,
+          aggressiveTurningCount: metrics.aggressiveTurningCount ?? 0,
+          speedingCount: metrics.speedingCount ?? 0,
+          averageSpeed: avgSpeed,
+          maxSpeed,
+          duration,
+          distance: totalDistance,
+        });
+      }
+
       onExit();
     } catch (err) {
       console.error('Error ending trip:', err);

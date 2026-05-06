@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, Trip } from '../../lib/supabase';
-import { MapPin, Clock, TrendingUp, Award, Calendar, AlertTriangle, Zap, RefreshCw } from 'lucide-react';
+import { MapPin, Clock, TrendingUp, Award, Calendar, AlertTriangle, Zap, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+
+const TripMapView = lazy(() => import('../Trip/TripMapView').then(m => ({ default: m.TripMapView })));
+const TripExport = lazy(() => import('../Trip/TripExport').then(m => ({ default: m.TripExport })));
 
 export function TripsView() {
   const { user } = useAuth();
@@ -9,233 +12,58 @@ export function TripsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'completed' | 'in_progress'>('all');
+  const [expandedTrip, setExpandedTrip] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user) {
-      fetchTrips();
-    }
-  }, [user, filter]);
+  useEffect(() => { if (user) { fetchTrips(); } }, [user, filter]);
 
   const fetchTrips = async () => {
     if (!user) return;
-
-    setLoading(true);
-    setError(null);
-    let query = supabase
-      .from('trips')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (filter !== 'all') {
-      query = query.eq('status', filter);
-    }
-
+    setLoading(true); setError(null);
+    let query = supabase.from('trips').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+    if (filter !== 'all') { query = query.eq('status', filter); }
     const { data, error: fetchError } = await query;
-
-    if (fetchError) {
-      setError('Failed to load trips. Please try again.');
-    } else {
-      setTrips(data || []);
-    }
+    if (fetchError) { setError('Failed to load trips. Please try again.'); } else { setTrips(data || []); }
     setLoading(false);
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const formatDuration = (seconds: number) => { const hours = Math.floor(seconds / 3600); const minutes = Math.floor((seconds % 3600) / 60); return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`; };
+  const getSafetyScoreColor = (score: number) => score >= 90 ? 'text-green-600 bg-green-50 border-green-200' : score >= 70 ? 'text-yellow-600 bg-yellow-50 border-yellow-200' : 'text-red-600 bg-red-50 border-red-200';
+  const getStatusBadge = (status: string) => status === 'completed' ? <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">Completed</span> : <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">In Progress</span>;
 
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  };
-
-  const getSafetyScoreColor = (score: number) => {
-    if (score >= 90) return 'text-green-600 bg-green-50 border-green-200';
-    if (score >= 70) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-    return 'text-red-600 bg-red-50 border-red-200';
-  };
-
-  const getStatusBadge = (status: string) => {
-    if (status === 'completed') {
-      return <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">Completed</span>;
-    }
-    return <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">In Progress</span>;
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 flex items-center justify-center p-6">
-        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 max-w-md w-full text-center">
-          <div className="bg-red-500/10 p-4 rounded-xl inline-block mb-6">
-            <AlertTriangle className="w-10 h-10 text-red-400" />
-          </div>
-          <h2 className="text-xl font-semibold text-white mb-2">Failed to load trips</h2>
-          <p className="text-gray-400 text-sm mb-6">{error}</p>
-          <button
-            onClick={fetchTrips}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (loading) { return <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div></div>; }
+  if (error) { return <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/50 to-slate-900 flex items-center justify-center p-6"><div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 max-w-md w-full text-center"><div className="bg-red-500/10 p-4 rounded-xl inline-block mb-6"><AlertTriangle className="w-10 h-10 text-red-400" /></div><h2 className="text-xl font-semibold text-white mb-2">Failed to load trips</h2><p className="text-gray-400 text-sm mb-6">{error}</p><button onClick={fetchTrips} className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"><RefreshCw className="w-4 h-4" />Retry</button></div></div>; }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Trip History</h1>
-          <p className="text-gray-600 mt-1">View and analyze your driving trips</p>
-        </div>
-      </div>
-
+      <div className="flex items-center justify-between"><div><h1 className="text-3xl font-bold text-gray-900">Trip History</h1><p className="text-gray-600 mt-1">View and analyze your driving trips</p></div></div>
       <div className="flex gap-2">
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            filter === 'all'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
-        >
-          All Trips
-        </button>
-        <button
-          onClick={() => setFilter('completed')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            filter === 'completed'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
-        >
-          Completed
-        </button>
-        <button
-          onClick={() => setFilter('in_progress')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            filter === 'in_progress'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
-        >
-          In Progress
-        </button>
+        <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${filter === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}>All Trips</button>
+        <button onClick={() => setFilter('completed')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${filter === 'completed' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}>Completed</button>
+        <button onClick={() => setFilter('in_progress')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${filter === 'in_progress' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}>In Progress</button>
       </div>
 
       {trips.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-          <div className="text-center">
-            <MapPin className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No trips found</h3>
-            <p className="text-gray-600">Start driving to see your trips here</p>
-          </div>
-        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12"><div className="text-center"><MapPin className="w-16 h-16 text-gray-300 mx-auto mb-4" /><h3 className="text-xl font-bold text-gray-900 mb-2">No trips found</h3><p className="text-gray-600">Start driving to see your trips here</p></div></div>
       ) : (
         <div className="space-y-4">
-          {trips.map((trip) => (
-            <div
-              key={trip.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-start gap-4">
-                  <div className="bg-blue-100 p-3 rounded-xl">
-                    <MapPin className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-lg">{trip.start_location}</h3>
-                    {trip.end_location && (
-                      <p className="text-gray-600 mt-1">to {trip.end_location}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-500">{formatDate(trip.start_time)}</span>
-                      {getStatusBadge(trip.status)}
-                    </div>
-                  </div>
+          {trips.map((trip) => { const isExpanded = expandedTrip === trip.id; return (
+            <div key={trip.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start gap-4"><div className="bg-blue-100 p-3 rounded-xl"><MapPin className="w-6 h-6 text-blue-600" /></div><div><h3 className="font-bold text-gray-900 text-lg">{trip.start_location}</h3>{trip.end_location && <p className="text-gray-600 mt-1">to {trip.end_location}</p>}<div className="flex items-center gap-2 mt-2"><Calendar className="w-4 h-4 text-gray-400" /><span className="text-sm text-gray-500">{formatDate(trip.start_time)}</span>{getStatusBadge(trip.status)}</div></div></div>
+                  <div className="flex items-center gap-3"><div className={`px-4 py-2 rounded-xl border-2 ${getSafetyScoreColor(trip.safety_score)}`}><div className="flex items-center gap-2"><Award className="w-5 h-5" /><span className="text-2xl font-bold">{trip.safety_score}</span></div></div>{trip.status === 'completed' && <button onClick={() => setExpandedTrip(isExpanded ? null : trip.id)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">{isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}</button>}</div>
                 </div>
-                <div className={`px-4 py-2 rounded-xl border-2 ${getSafetyScoreColor(trip.safety_score)}`}>
-                  <div className="flex items-center gap-2">
-                    <Award className="w-5 h-5" />
-                    <span className="text-2xl font-bold">{trip.safety_score}</span>
-                  </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center gap-3"><div className="bg-gray-100 p-2 rounded-lg"><Clock className="w-4 h-4 text-gray-600" /></div><div><p className="text-xs text-gray-500">Duration</p><p className="font-semibold text-gray-900">{formatDuration(trip.duration)}</p></div></div>
+                  <div className="flex items-center gap-3"><div className="bg-gray-100 p-2 rounded-lg"><TrendingUp className="w-4 h-4 text-gray-600" /></div><div><p className="text-xs text-gray-500">Distance</p><p className="font-semibold text-gray-900">{trip.distance.toFixed(1)} km</p></div></div>
+                  <div className="flex items-center gap-3"><div className="bg-gray-100 p-2 rounded-lg"><TrendingUp className="w-4 h-4 text-gray-600" /></div><div><p className="text-xs text-gray-500">Avg Speed</p><p className="font-semibold text-gray-900">{trip.average_speed.toFixed(0)} km/h</p></div></div>
+                  <div className="flex items-center gap-3"><div className="bg-gray-100 p-2 rounded-lg"><AlertTriangle className="w-4 h-4 text-gray-600" /></div><div><p className="text-xs text-gray-500">Harsh Braking</p><p className="font-semibold text-gray-900">{trip.harsh_braking_count}</p></div></div>
+                  <div className="flex items-center gap-3"><div className="bg-gray-100 p-2 rounded-lg"><Zap className="w-4 h-4 text-gray-600" /></div><div><p className="text-xs text-gray-500">Rapid Accel</p><p className="font-semibold text-gray-900">{trip.rapid_acceleration_count}</p></div></div>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="bg-gray-100 p-2 rounded-lg">
-                    <Clock className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Duration</p>
-                    <p className="font-semibold text-gray-900">{formatDuration(trip.duration)}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="bg-gray-100 p-2 rounded-lg">
-                    <TrendingUp className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Distance</p>
-                    <p className="font-semibold text-gray-900">{trip.distance.toFixed(1)} km</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="bg-gray-100 p-2 rounded-lg">
-                    <TrendingUp className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Avg Speed</p>
-                    <p className="font-semibold text-gray-900">{trip.average_speed.toFixed(0)} km/h</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="bg-gray-100 p-2 rounded-lg">
-                    <AlertTriangle className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Harsh Braking</p>
-                    <p className="font-semibold text-gray-900">{trip.harsh_braking_count}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="bg-gray-100 p-2 rounded-lg">
-                    <Zap className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Rapid Accel</p>
-                    <p className="font-semibold text-gray-900">{trip.rapid_acceleration_count}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+              {isExpanded && <div className="border-t border-gray-200 bg-gray-50 p-6 space-y-6"><Suspense fallback={<div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div></div>}><TripMapView tripId={trip.id} /></Suspense><Suspense fallback={<div className="flex items-center justify-center h-16"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-400"></div></div>}><TripExport tripId={trip.id} /></Suspense></div>}
+            </div>); })}
         </div>
       )}
     </div>

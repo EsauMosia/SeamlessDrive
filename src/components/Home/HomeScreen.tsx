@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { BarChart3, Settings, Shield, ArrowRight, TrendingUp } from 'lucide-react';
+import { BarChart3, Settings, Shield, ArrowRight, TrendingUp, Cpu } from 'lucide-react';;
 
 type HomeScreenProps = {
   onStartDriving: () => void;
@@ -70,29 +70,23 @@ export function HomeScreen({ onStartDriving, onNavigate }: HomeScreenProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 w-full max-w-md pt-8">
-          <button
-            onClick={() => onNavigate('insights')}
-            className="group p-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all"
-          >
+        <div className="grid grid-cols-2 gap-3 w-full max-w-md pt-8">
+          <button onClick={() => onNavigate('insights')} className="group p-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all">
             <BarChart3 className="w-6 h-6 text-blue-400 mb-2 group-hover:text-blue-300 transition-colors" />
             <p className="text-sm text-gray-300 font-medium">Insights</p>
             <p className="text-xs text-gray-500 mt-1">Driving data</p>
           </button>
-
-          <button
-            onClick={() => onNavigate('analytics')}
-            className="group p-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all"
-          >
+          <button onClick={() => onNavigate('analytics')} className="group p-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all">
             <TrendingUp className="w-6 h-6 text-emerald-400 mb-2 group-hover:text-emerald-300 transition-colors" />
             <p className="text-sm text-gray-300 font-medium">Analytics</p>
             <p className="text-xs text-gray-500 mt-1">Charts & trends</p>
           </button>
-
-          <button
-            onClick={() => onNavigate('settings')}
-            className="group p-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all"
-          >
+          <button onClick={() => onNavigate('integrations')} className="group p-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all">
+            <Cpu className="w-6 h-6 text-cyan-400 mb-2 group-hover:text-cyan-300 transition-colors" />
+            <p className="text-sm text-gray-300 font-medium">Integrations</p>
+            <p className="text-xs text-gray-500 mt-1">Connect vehicles</p>
+          </button>
+          <button onClick={() => onNavigate('settings')} className="group p-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all">
             <Settings className="w-6 h-6 text-blue-400 mb-2 group-hover:text-blue-300 transition-colors" />
             <p className="text-sm text-gray-300 font-medium">Settings</p>
             <p className="text-xs text-gray-500 mt-1">Preferences</p>

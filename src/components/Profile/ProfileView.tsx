@@ -15,10 +15,10 @@ export function ProfileView() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-
-    setLoading(true);
-    setError('');
-    setSuccess(false);
+    if (fullName.trim().length > 100) { setError('Name must be 100 characters or less'); return; }
+    if (phone && !/^[+\d\s\-()]{7,20}$/.test(phone)) { setError('Please enter a valid phone number'); return; }
+    if (emergencyContact && !/^[+\d\s\-()]{7,20}$/.test(emergencyContact)) { setError('Please enter a valid emergency contact number'); return; }
+    setLoading(true); setError(''); setSuccess(false);
 
     const { error: updateError } = await supabase
       .from('user_profiles')
