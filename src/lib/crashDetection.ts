@@ -13,11 +13,12 @@ export class CrashDetectionEngine {
       confidence += 0.4;
     }
 
-    if (this.lastSpeed > 20 && gps.speed < this.lastSpeed * this.speedDropThreshold) {
+    const currentSpeed = Math.max(0, gps.speed);
+    if (this.lastSpeed > 20 && currentSpeed >= 0 && currentSpeed < this.lastSpeed * this.speedDropThreshold) {
       confidence += 0.3;
     }
 
-    this.lastSpeed = gps.speed;
+    this.lastSpeed = currentSpeed;
 
     return {
       isCrash: confidence > 0.6,

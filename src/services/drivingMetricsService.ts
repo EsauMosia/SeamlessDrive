@@ -27,9 +27,11 @@ async function flushQueue(): Promise<void> {
 
   isFlushing = true;
   const batch = writeQueue.splice(0, writeQueue.length);
-  isFlushing = false;
 
-  if (batch.length === 0) return;
+  if (batch.length === 0) {
+    isFlushing = false;
+    return;
+  }
 
   if (!offlineStorage.isOnline()) {
     for (const item of batch) {
@@ -42,6 +44,7 @@ async function flushQueue(): Promise<void> {
         acceleration: computeAcceleration(item.motion),
       });
     }
+    isFlushing = false;
     return;
   }
 
@@ -54,10 +57,24 @@ async function flushQueue(): Promise<void> {
     acceleration: computeAcceleration(item.motion),
   }));
 
-  const { error } = await supabase.from('driving_metrics').insert(rows);
+  try {
+    const { error } = await supabase.from('driving_metrics').insert(rows);
 
-  if (error) {
-    console.error('Error flushing metrics batch, queuing offline:', error);
+    if (error) {
+      console.error('Error flushing metrics batch, queuing offline:', error);
+      for (const item of batch) {
+        offlineStorage.queueMetric({
+          tripId: item.tripId,
+          timestamp: new Date().toISOString(),
+          speed: item.gps.speed,
+          latitude: item.gps.latitude,
+          longitude: item.gps.longitude,
+          acceleration: computeAcceleration(item.motion),
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Unexpected error flushing metrics:', err);
     for (const item of batch) {
       offlineStorage.queueMetric({
         tripId: item.tripId,
@@ -68,6 +85,8 @@ async function flushQueue(): Promise<void> {
         acceleration: computeAcceleration(item.motion),
       });
     }
+  } finally {
+    isFlushing = false;
   }
 }
 
@@ -95,9 +114,9 @@ export async function saveDrivingMetrics(payload: MetricPayload): Promise<void> 
   }
 }
 
-export function shutdownMetricsService(): void {
+export async function shutdownMetricsService(): Promise<void> {
   stopFlushTimer();
-  flushQueue();
+  await flushQueue();
 }
 
 export { flushQueue };

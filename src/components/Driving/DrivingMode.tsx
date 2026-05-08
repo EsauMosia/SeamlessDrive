@@ -59,6 +59,8 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
   const tripIdRef = useRef('');
   const autoSyncCleanupRef = useRef<(() => void) | null>(null);
   const lastGpsRef = useRef<GPSData | null>(null);
+  const drivingTimeRef = useRef(0);
+  const mountedRef = useRef(true);
 
   useEffect(() => { tripIdRef.current = tripId; }, [tripId]);
 
@@ -84,6 +86,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     setPendingSync(offlineStorage.getPendingCount());
 
     return () => {
+      mountedRef.current = false;
       if (monitoringIntervalRef.current) clearInterval(monitoringIntervalRef.current);
       if (watchdogRef.current) clearInterval(watchdogRef.current);
       if (autoSyncCleanupRef.current) autoSyncCleanupRef.current();
@@ -136,8 +139,9 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
     setCrashNotifying(true);
 
     const gps = lastGpsRef.current;
-    const lat = gps?.latitude ?? 0;
-    const lng = gps?.longitude ?? 0;
+    const hasValidGps = gps && gps.latitude !== 0 && gps.longitude !== 0;
+    const lat = hasValidGps ? gps.latitude : null;
+    const lng = hasValidGps ? gps.longitude : null;
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -164,6 +168,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
 
   const startMonitoring = () => {
     monitoringIntervalRef.current = window.setInterval(() => {
+      if (!mountedRef.current) return;
       const gps = sensorService.getCurrentGPS();
       const motion = sensorService.getCurrentMotion();
 
@@ -171,7 +176,8 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
 
       if (gps) {
         lastGpsRef.current = gps;
-        setDrivingTime((prev) => prev + 1);
+        drivingTimeRef.current += 1;
+        setDrivingTime(drivingTimeRef.current);
         behaviorEngine.analyzeSpeed(gps.speed);
         fatigueEngine.recordSpeed(gps.speed);
 
@@ -181,16 +187,21 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         setIsStopped(gps.speed < 1);
 
         // Hazard zone detection (every 10 seconds)
-        if (drivingTime % 10 === 0) {
+        if (drivingTimeRef.current % 10 === 0) {
           (async () => {
-            await hazardEngine.loadNearbyZones(gps.latitude, gps.longitude);
-            const hazards = hazardEngine.checkHazards(gps.latitude, gps.longitude, gps.speed);
-            setHazardAlerts(hazards);
-            if (hazards.length > 0 && hazards[0].severity === 'danger') {
-              addPreventiveAlert({ type: 'hazard', severity: 'danger', message: hazards[0].message });
-              setSafetyStatus('critical');
-            } else if (hazards.length > 0) {
-              addPreventiveAlert({ type: 'hazard', severity: 'warning', message: hazards[0].message });
+            try {
+              await hazardEngine.loadNearbyZones(gps.latitude, gps.longitude);
+              if (!mountedRef.current) return;
+              const hazards = hazardEngine.checkHazards(gps.latitude, gps.longitude, gps.speed);
+              setHazardAlerts(hazards);
+              if (hazards.length > 0 && hazards[0].severity === 'danger') {
+                addPreventiveAlert({ type: 'hazard', severity: 'danger', message: hazards[0].message });
+                setSafetyStatus('critical');
+              } else if (hazards.length > 0) {
+                addPreventiveAlert({ type: 'hazard', severity: 'warning', message: hazards[0].message });
+              }
+            } catch (err) {
+              console.error('Hazard detection error:', err);
             }
           })();
         }
@@ -201,7 +212,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         if (motionEvent) {
           setLastAlert(motionEvent);
           setSafetyStatus(motionEvent.severity === 'high' ? 'critical' : 'warning');
-          setTimeout(() => { setSafetyStatus('safe'); setLastAlert(null); }, 4000);
+          setTimeout(() => { if (mountedRef.current) { setSafetyStatus('safe'); setLastAlert(null); } }, 4000);
         }
 
         // Distraction detection
@@ -216,7 +227,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         }
 
         // Fatigue detection (every 30 seconds)
-        if (drivingTime % 30 === 0) {
+        if (drivingTimeRef.current % 30 === 0) {
           const fatigue = fatigueEngine.analyze(motion.acceleration.x, motion.acceleration.y);
           setFatigueState(fatigue);
           if (fatigue.level !== 'alert') {
@@ -261,6 +272,8 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
         await refreshProfile(); onExit(); return;
       }
       await offlineStorage.syncMetrics();
+      // Brief delay to ensure Supabase has committed synced metrics before querying
+      await new Promise((resolve) => setTimeout(resolve, 500));
       const { data: metricsData, error: metricsError } = await supabase.from('driving_metrics').select('*').eq('trip_id', tripId);
       let totalDistance = 0, maxSpeed = 0, avgSpeed = 0, duration = drivingTime;
       if (!metricsError && metricsData && metricsData.length > 0) {
@@ -331,7 +344,7 @@ export function DrivingMode({ onExit }: DrivingModeProps) {
             >
               <Phone className="w-4 h-4 inline mr-2" />Call 911
             </a>
-            {lastGpsRef.current && (
+            {lastGpsRef.current && lastGpsRef.current.latitude !== 0 && lastGpsRef.current.longitude !== 0 && (
               <a
                 href={`https://www.google.com/maps?q=${lastGpsRef.current.latitude},${lastGpsRef.current.longitude}`}
                 target="_blank"

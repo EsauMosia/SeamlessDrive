@@ -172,16 +172,20 @@ export const offlineStorage = {
 
   startAutoSync(onSync?: (result: { synced: number; failed: number }) => void): () => void {
     const sync = async () => {
-      const result = await Promise.all([
-        offlineStorage.syncMetrics(),
-        offlineStorage.syncTrips(),
-      ]);
-      const total = {
-        synced: result[0].synced + result[1].synced,
-        failed: result[0].failed + result[1].failed,
-      };
-      if (total.synced > 0 && onSync) {
-        onSync(total);
+      try {
+        const result = await Promise.all([
+          offlineStorage.syncMetrics(),
+          offlineStorage.syncTrips(),
+        ]);
+        const total = {
+          synced: result[0].synced + result[1].synced,
+          failed: result[0].failed + result[1].failed,
+        };
+        if (total.synced > 0 && onSync) {
+          onSync(total);
+        }
+      } catch (err) {
+        console.error('Auto-sync error:', err);
       }
     };
 

@@ -67,6 +67,7 @@ export class HazardZoneEngine {
   }
 
   checkHazards(latitude: number, longitude: number, speedKmh: number): HazardAlert[] {
+    if (latitude === 0 && longitude === 0) return [];
     const alerts: HazardAlert[] = [];
 
     for (const zone of this.cachedZones) {
